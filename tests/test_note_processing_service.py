@@ -7,7 +7,7 @@ from joplin_notes_ai.exceptions import (
     LlmResponseValidationError,
     VectorStoreError,
 )
-from joplin_notes_ai.models import NoteDetails, NoteSummary, TransformationResult
+from joplin_notes_ai.models import NoteDetails, NoteSummary, RelatedCandidate, TransformationResult
 from joplin_notes_ai.services.note_processing import NoteProcessingService
 
 
@@ -44,11 +44,11 @@ class NoteProcessingServiceTestCase(unittest.TestCase):
             suggested_tags=["python", "ai", "notes"],
         )
         self.joplin.get_note_tag_titles.return_value = {"ai-audited", "python", "ai", "notes"}
+        self.vector_store.search_candidates.return_value = []
 
     def test_successful_processing(self):
         self.joplin.get_note.return_value = self.note
         self.llm.transform_note.return_value = self.result
-        self.vector_store.find_related.return_value = []
         self.joplin.update_note.return_value = True
 
         outcome = self.service.process(self.note_summary, {"Tech": "folder-1"})
@@ -92,7 +92,6 @@ class NoteProcessingServiceTestCase(unittest.TestCase):
     def test_missing_notebook_keeps_parent_id_empty(self):
         self.joplin.get_note.return_value = self.note
         self.llm.transform_note.return_value = self.result
-        self.vector_store.find_related.return_value = []
         self.joplin.update_note.return_value = True
 
         outcome = self.service.process(self.note_summary, {"Other": "folder-2"})
@@ -121,13 +120,34 @@ class NoteProcessingServiceTestCase(unittest.TestCase):
     def test_dry_run_processes_without_writes(self):
         self.joplin.get_note.return_value = self.note
         self.llm.transform_note.return_value = self.result
-        self.vector_store.find_related.return_value = []
 
         outcome = self.service.process(self.note_summary, {"Tech": "folder-1"}, dry_run=True)
 
         self.assertEqual(outcome.status, "dry_run")
         self.joplin.update_note.assert_not_called()
         self.vector_store.upsert_note.assert_not_called()
+
+    def test_candidates_below_threshold_are_not_published_in_note(self):
+        self.joplin.get_note.return_value = self.note
+        self.llm.transform_note.return_value = self.result
+        self.vector_store.search_candidates.return_value = [
+            RelatedCandidate(
+                note_id="n2",
+                title="Near miss",
+                distance=0.31,
+                similarity=0.69,
+                accepted=False,
+                rejection_reason="below_threshold",
+                rank=1,
+            )
+        ]
+        self.joplin.update_note.return_value = True
+
+        self.service.process(self.note_summary, {"Tech": "folder-1"})
+
+        update = self.joplin.update_note.call_args.args[1]
+        self.assertNotIn("Семантичні зв'язки", update.body)
+        self.assertNotIn("Near miss", update.body)
 
     def test_normalizes_note_before_llm_call(self):
         raw_body = (
