@@ -1,4 +1,5 @@
 import time
+from typing import Any
 
 import chromadb
 from chromadb.utils import embedding_functions
@@ -6,7 +7,7 @@ from loguru import logger
 
 from joplin_notes_ai.config import Settings
 from joplin_notes_ai.exceptions import VectorStoreError
-from joplin_notes_ai.models import RelatedCandidate, RelatedNote, WarmupResult
+from joplin_notes_ai.models import NoteDetails, RelatedCandidate, RelatedNote, WarmupResult
 
 
 class VectorStore:
@@ -64,14 +65,59 @@ class VectorStore:
         )
 
     def upsert_note(self, note_id: str, title: str, content: str) -> None:
+        self.upsert_note_with_metadata(note_id, title, content, metadata=None)
+
+    def upsert_note_with_metadata(
+        self,
+        note_id: str,
+        title: str,
+        content: str,
+        metadata: dict[str, Any] | None,
+    ) -> None:
+        computed_metadata = self._build_index_metadata(note_id, title, content, metadata)
         try:
             self._collection.upsert(
                 ids=[note_id],
                 documents=[f"{title}\n{content}"],
-                metadatas=[{"title": title, "id": note_id}],
+                metadatas=[computed_metadata],
             )
         except Exception as exc:  # noqa: BLE001 - wrapped into a typed exception
             raise VectorStoreError(f"Помилка upsert в ChromaDB: {exc}") from exc
+
+    def reset_collection(self) -> None:
+        try:
+            self._client.delete_collection("joplin_notes")
+            self._collection = self._client.get_or_create_collection(
+                name="joplin_notes",
+                embedding_function=self._emb_fn,
+                metadata={"hnsw:space": "cosine"},
+            )
+        except Exception as exc:  # noqa: BLE001 - wrapped into a typed exception
+            raise VectorStoreError(f"Помилка скидання колекції ChromaDB: {exc}") from exc
+
+    @staticmethod
+    def build_metadata_for_note(note: NoteDetails, machine_marker: str) -> dict[str, Any]:
+        normalized_title = (note.title or "").strip().lower()
+        normalized_body = (note.body or "").replace("\r\n", "\n").replace("\r", "\n")
+        words = [part for part in normalized_body.split() if part]
+        lines = [line for line in normalized_body.split("\n") if line.strip()]
+        marker_present = bool(machine_marker and machine_marker in normalized_body)
+
+        return {
+            "notebook_id": note.parent_id or "",
+            "title_normalized": normalized_title,
+            "content_preview": normalized_body[:280],
+            "content_length": len(normalized_body),
+            "word_count": len(words),
+            "line_count": len(lines),
+            "has_machine_marker": marker_present,
+            "source_created_time": int(note.created_time or 0),
+            "source_updated_time": int(note.updated_time or 0),
+            "source_user_updated_time": int(note.user_updated_time or 0),
+            "source_url": (note.source_url or "")[:280],
+            "is_todo": int(note.is_todo or 0),
+            "indexed_at_unix": int(time.time()),
+        }
 
     def search_candidates(self, note_id: str, content: str) -> list[RelatedCandidate]:
         top_k = (
@@ -182,6 +228,24 @@ class VectorStore:
                 candidate.rejection_reason or "published",
             )
 
+    @staticmethod
+    def _build_index_metadata(
+        note_id: str,
+        title: str,
+        content: str,
+        metadata: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        base: dict[str, Any] = {
+            "title": title,
+            "id": note_id,
+            "indexed_at_unix": int(time.time()),
+            "content_length": len(content or ""),
+            "title_normalized": (title or "").strip().lower(),
+        }
+        if metadata:
+            base.update(metadata)
+        return base
+
 
 class NoOpVectorStore:
     """Vector store implementation for dry-run mode."""
@@ -195,6 +259,18 @@ class NoOpVectorStore:
         )
 
     def upsert_note(self, note_id: str, title: str, content: str) -> None:
+        return None
+
+    def upsert_note_with_metadata(
+        self,
+        note_id: str,
+        title: str,
+        content: str,
+        metadata: dict[str, Any] | None,
+    ) -> None:
+        return None
+
+    def reset_collection(self) -> None:
         return None
 
     def search_candidates(self, note_id: str, content: str) -> list[RelatedCandidate]:
