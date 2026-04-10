@@ -1,0 +1,1 @@
+"""Joplin Notes AI package."""
