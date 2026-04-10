@@ -1,4 +1,4 @@
-from joplin_notes_ai.models import NoteDetails, RelatedNote, TransformationResult
+from joplin_notes_ai.models import RelatedNote, TransformationResult
 
 
 def build_related_links_block(related: list[RelatedNote], similarity_threshold: float) -> str:
@@ -27,21 +27,15 @@ def build_audit_details(result: TransformationResult) -> str:
     return "".join(parts)
 
 
-def build_original_backup(note: NoteDetails) -> str:
-    return (
-        "\n\n<details>\n<summary>Оригінальна чернетка (Backup)</summary>\n\n"
-        f"**Стара назва:** {note.title}\n\n"
-        f"{note.body}\n\n</details>"
-    )
-
-
 def build_final_content(
-    note: NoteDetails,
     result: TransformationResult,
     related: list[RelatedNote],
     similarity_threshold: float,
+    machine_marker: str,
 ) -> str:
     related_block = build_related_links_block(related, similarity_threshold)
     audit_details = build_audit_details(result)
-    original_backup = build_original_backup(note)
-    return result.content + related_block + audit_details + original_backup
+    content = result.content + related_block + audit_details
+    if machine_marker and machine_marker not in content:
+        content = content.rstrip() + f"\n\n{machine_marker}\n"
+    return content
