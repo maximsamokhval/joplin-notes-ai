@@ -5,7 +5,7 @@ from loguru import logger
 
 from joplin_notes_ai.config import Settings
 from joplin_notes_ai.exceptions import JoplinApiError
-from joplin_notes_ai.models import Notebook, NoteDetails, NoteSummary, ProcessedNoteUpdate
+from joplin_notes_ai.models import Notebook, NoteDetails, NoteSummary, ProcessedNoteUpdate, TagInfo
 
 
 class JoplinClient:
@@ -135,17 +135,64 @@ class JoplinClient:
         return notes
 
     def ensure_tag_exists(self, tag_title: str) -> str | None:
-        tags = self._request("tags")
-        if tags and "items" in tags:
-            for item in tags["items"]:
-                if item["title"].lower() == tag_title.lower():
-                    return item["id"]
+        for tag in self.list_tags():
+            if tag.title.lower() == tag_title.lower():
+                return tag.id
 
         res = self._request("tags", method="post", data={"title": tag_title})
         return res.get("id") if res else None
 
+    def list_tags(self) -> list[TagInfo]:
+        tags: list[TagInfo] = []
+        page = 1
+        while True:
+            res = self._request("tags", params={"page": page, "fields": "id,title"})
+            if not res or not res.get("items"):
+                break
+            tags.extend(
+                TagInfo(
+                    id=item["id"],
+                    title=item.get("title", ""),
+                )
+                for item in res["items"]
+            )
+            if not res.get("has_more"):
+                break
+            page += 1
+        return tags
+
+    def list_notes_by_tag(self, tag_id: str) -> list[NoteSummary]:
+        notes: list[NoteSummary] = []
+        page = 1
+        while True:
+            res = self._request(
+                f"tags/{tag_id}/notes",
+                params={"page": page, "fields": "id,title"},
+            )
+            if not res or not res.get("items"):
+                break
+            notes.extend(
+                NoteSummary(
+                    id=item["id"],
+                    title=item.get("title", ""),
+                )
+                for item in res["items"]
+            )
+            if not res.get("has_more"):
+                break
+            page += 1
+        return notes
+
     def attach_tag_to_note(self, note_id: str, tag_id: str) -> bool:
         res = self._request(f"tags/{tag_id}/notes", method="post", data={"id": note_id})
+        return bool(res)
+
+    def detach_tag_from_note(self, note_id: str, tag_id: str) -> bool:
+        res = self._request(f"tags/{tag_id}/notes/{note_id}", method="delete")
+        return bool(res)
+
+    def delete_tag(self, tag_id: str) -> bool:
+        res = self._request(f"tags/{tag_id}", method="delete")
         return bool(res)
 
     def add_tag_to_note_by_title(self, note_id: str, tag_title: str) -> bool:
@@ -153,6 +200,24 @@ class JoplinClient:
         if not tag_id:
             return False
         return self.attach_tag_to_note(note_id, tag_id)
+
+    def replace_tag_in_notes(
+        self,
+        source_tag_id: str,
+        target_tag_title: str,
+    ) -> tuple[str | None, int]:
+        target_tag_id = self.ensure_tag_exists(target_tag_title)
+        if not target_tag_id:
+            return None, 0
+        if target_tag_id == source_tag_id:
+            return target_tag_id, 0
+
+        replaced = 0
+        for note in self.list_notes_by_tag(source_tag_id):
+            self.attach_tag_to_note(note.id, target_tag_id)
+            self.detach_tag_from_note(note.id, source_tag_id)
+            replaced += 1
+        return target_tag_id, replaced
 
     def get_note_tag_titles(self, note_id: str) -> set[str]:
         res = self._request(f"notes/{note_id}/tags", params={"fields": "title"})
