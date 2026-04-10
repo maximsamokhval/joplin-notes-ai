@@ -24,6 +24,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Максимальна кількість нотаток для обробки за запуск.",
     )
+    parser.add_argument(
+        "--reindex-all",
+        action="store_true",
+        help=(
+            "Очистити векторну колекцію і переіндексувати всі наявні нотатки "
+            "з розширеними метаданими."
+        ),
+    )
     return parser
 
 
@@ -59,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         app = JoplinNotesAiApp(settings)
-        app.run(dry_run=args.dry_run, limit=args.limit)
+        app.run(dry_run=args.dry_run, limit=args.limit, reindex_all=args.reindex_all)
         return 0
     except Exception as exc:  # noqa: BLE001 - final process guard
         logger.exception(f"Критичний збій: {exc}")
