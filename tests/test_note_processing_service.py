@@ -43,6 +43,7 @@ class NoteProcessingServiceTestCase(unittest.TestCase):
             target_notebook="Tech",
             suggested_tags=["python", "ai", "notes"],
         )
+        self.joplin.get_note_tag_titles.return_value = {"ai-audited", "python", "ai", "notes"}
 
     def test_successful_processing(self):
         self.joplin.get_note.return_value = self.note
@@ -56,6 +57,7 @@ class NoteProcessingServiceTestCase(unittest.TestCase):
         self.joplin.update_note.assert_called_once()
         update = self.joplin.update_note.call_args.args[1]
         self.assertEqual(update.parent_id, "folder-1")
+        self.assertIn("<!-- ai_audited_v1 -->", update.body)
 
     def test_skip_empty_note(self):
         self.joplin.get_note.return_value = NoteDetails(id="n1", title="Draft", body=" ")
@@ -69,7 +71,7 @@ class NoteProcessingServiceTestCase(unittest.TestCase):
         self.joplin.get_note.return_value = NoteDetails(
             id="n1",
             title="Draft",
-            body="some text\nОригінальна чернетка\n",
+            body="some text\n<!-- ai_audited_v1 -->\n",
         )
 
         outcome = self.service.process(self.note_summary, {"Tech": "folder-1"})
@@ -84,6 +86,7 @@ class NoteProcessingServiceTestCase(unittest.TestCase):
         outcome = self.service.process(self.note_summary, {"Tech": "folder-1"})
 
         self.assertEqual(outcome.status, "skipped_llm_failed")
+        self.joplin.add_tag_to_note_by_title.assert_called_with("n1", "ai-failed")
         self.joplin.update_note.assert_not_called()
 
     def test_missing_notebook_keeps_parent_id_empty(self):
@@ -125,6 +128,20 @@ class NoteProcessingServiceTestCase(unittest.TestCase):
         self.assertEqual(outcome.status, "dry_run")
         self.joplin.update_note.assert_not_called()
         self.vector_store.upsert_note.assert_not_called()
+
+    def test_normalizes_note_before_llm_call(self):
+        raw_body = (
+            "Line 1\r\n\r\n\r\n"
+            "<details><summary>Оригінальна чернетка (Backup)</summary>trash</details>\n"
+            "<!-- ai_audited_v1 -->\n"
+            "Line 2"
+        )
+
+        normalized_body = NoteProcessingService._normalize_note_for_llm(raw_body)
+        self.assertNotIn("<details>", normalized_body)
+        self.assertNotIn("<!-- ai_audited_v1 -->", normalized_body)
+        self.assertIn("Line 1", normalized_body)
+        self.assertIn("Line 2", normalized_body)
 
 
 if __name__ == "__main__":
