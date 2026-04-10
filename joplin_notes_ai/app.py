@@ -6,7 +6,7 @@ from joplin_notes_ai.clients import JoplinClient, LlmClient, NoOpVectorStore, Ve
 from joplin_notes_ai.config import Settings
 from joplin_notes_ai.models import Notebook
 from joplin_notes_ai.repositories import PromptLoader
-from joplin_notes_ai.services import NoteProcessingService
+from joplin_notes_ai.services import NoteProcessingService, TagTaxonomyService
 
 
 class JoplinNotesAiApp:
@@ -20,10 +20,16 @@ class JoplinNotesAiApp:
         dry_run: bool = False,
         limit: int | None = None,
         reindex_all: bool = False,
+        organize_tags: bool = False,
     ) -> None:
         logger.info("Старт автоматизованої системи трансформації знань.")
         if reindex_all and dry_run:
             logger.warning("Режим --dry-run ігнорується для --reindex-all.")
+
+        if organize_tags:
+            self._organize_tags(dry_run=dry_run)
+            logger.info("Сесію генерації завершено.")
+            return
 
         vector_store = self._build_vector_store(dry_run=False if reindex_all else dry_run)
         if reindex_all:
@@ -59,6 +65,24 @@ class JoplinNotesAiApp:
             time.sleep(self._settings.pause_between_notes)
 
         logger.info("Сесію генерації завершено.")
+
+    def _organize_tags(self, dry_run: bool) -> None:
+        service = TagTaxonomyService(
+            settings=self._settings,
+            joplin_client=self._joplin,
+            llm_client=self._llm,
+        )
+        outcome = service.organize(dry_run=dry_run)
+        if outcome.status == "skipped":
+            logger.info(outcome.message)
+            return
+        logger.info(
+            "tag_taxonomy_summary status={} analyzed_tags={} changed_tags={} message={!r}",
+            outcome.status,
+            outcome.analyzed_tags,
+            outcome.changed_tags,
+            outcome.message,
+        )
 
     def _reindex_vector_store(
         self,
