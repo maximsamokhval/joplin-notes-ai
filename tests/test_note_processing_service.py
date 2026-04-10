@@ -149,6 +149,34 @@ class NoteProcessingServiceTestCase(unittest.TestCase):
         self.assertNotIn("Семантичні зв'язки", update.body)
         self.assertNotIn("Near miss", update.body)
 
+    def test_similar_notes_are_linked_in_updated_note(self):
+        self.joplin.get_note.return_value = self.note
+        self.llm.transform_note.return_value = self.result
+        similar_note = NoteDetails(
+            id="n2",
+            title="Contract Engineering patterns",
+            body="Typed contracts for agent workflows",
+        )
+        self.vector_store.search_candidates.return_value = [
+            RelatedCandidate(
+                note_id=similar_note.id,
+                title=similar_note.title,
+                distance=0.12,
+                similarity=0.88,
+                accepted=True,
+                rejection_reason=None,
+                rank=1,
+            )
+        ]
+        self.joplin.update_note.return_value = True
+
+        outcome = self.service.process(self.note_summary, {"Tech": "folder-1"})
+
+        self.assertEqual(outcome.status, "processed")
+        update = self.joplin.update_note.call_args.args[1]
+        self.assertIn("Семантичні зв'язки", update.body)
+        self.assertIn("[Contract Engineering patterns](:/n2)", update.body)
+
     def test_normalizes_note_before_llm_call(self):
         raw_body = (
             "Line 1\r\n\r\n\r\n"
