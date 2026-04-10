@@ -84,6 +84,31 @@ class VectorStoreFilteringTestCase(unittest.TestCase):
         self.assertEqual(metadata["source_updated_time"], 222)
         self.assertIn("indexed_at_unix", metadata)
 
+    def test_build_semantic_text_removes_toc_and_keeps_signal(self):
+        content = (
+            "Короткий вступ про локальний пошук.\n\n"
+            "## Зміст\n"
+            "- [Що це](#що-це)\n"
+            "- [Висновки](#висновки)\n\n"
+            "## Що це\n"
+            "QMD поєднує BM25, векторний пошук і reranking.\n\n"
+            "## Ключові висновки\n"
+            "- Працює локально\n"
+            "- Підходить для knowledge base\n\n"
+            "<!-- ai_audited_v1 -->\n"
+        )
+
+        semantic_text = VectorStore.build_semantic_text(
+            "QMD: локальний пошук",
+            content,
+        )
+
+        self.assertIn("QMD: локальний пошук", semantic_text)
+        self.assertIn("QMD поєднує BM25, векторний пошук і reranking.", semantic_text)
+        self.assertIn("Працює локально", semantic_text)
+        self.assertNotIn("[Що це](#що-це)", semantic_text)
+        self.assertNotIn("<!-- ai_audited_v1 -->", semantic_text)
+
 
 if __name__ == "__main__":
     unittest.main()
