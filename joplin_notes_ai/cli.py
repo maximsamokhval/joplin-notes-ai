@@ -32,6 +32,14 @@ def build_parser() -> argparse.ArgumentParser:
             "з розширеними метаданими."
         ),
     )
+    parser.add_argument(
+        "--organize-tags",
+        action="store_true",
+        help=(
+            "Проаналізувати існуючі теги, побудувати таксономію, "
+            "об'єднати близькі теги і замінити їх у нотатках."
+        ),
+    )
     return parser
 
 
@@ -67,7 +75,12 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         app = JoplinNotesAiApp(settings)
-        app.run(dry_run=args.dry_run, limit=args.limit, reindex_all=args.reindex_all)
+        app.run(
+            dry_run=args.dry_run,
+            limit=args.limit,
+            reindex_all=args.reindex_all,
+            organize_tags=args.organize_tags,
+        )
         return 0
     except Exception as exc:  # noqa: BLE001 - final process guard
         logger.exception(f"Критичний збій: {exc}")
