@@ -6,6 +6,10 @@ from .domain import (
     ProcessingOutcome,
     RelatedCandidate,
     RelatedNote,
+    TagInfo,
+    TagOrganizationOutcome,
+    TagTaxonomyAssignment,
+    TagTaxonomyPlan,
     WarmupResult,
 )
 from .llm import TransformationResult
@@ -14,6 +18,10 @@ __all__ = [
     "NoteSummary",
     "NoteDetails",
     "Notebook",
+    "TagInfo",
+    "TagTaxonomyAssignment",
+    "TagTaxonomyPlan",
+    "TagOrganizationOutcome",
     "RelatedNote",
     "RelatedCandidate",
     "TransformationResult",
