@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 from joplin_notes_ai.app import JoplinNotesAiApp
 from joplin_notes_ai.clients.vector_store import NoOpVectorStore
 from joplin_notes_ai.config import Settings
-from joplin_notes_ai.models import WarmupResult
+from joplin_notes_ai.models import NoteDetails, WarmupResult
 
 
 def make_settings() -> Settings:
@@ -59,6 +59,46 @@ class AppVectorStoreBootstrapTestCase(unittest.TestCase):
         result = app._build_vector_store(dry_run=False)
 
         self.assertIs(result, vector_store)
+
+    def test_reindex_resets_collection_and_upserts_with_metadata(self) -> None:
+        app = JoplinNotesAiApp(make_settings())
+        vector_store = Mock()
+        vector_store.reset_collection.return_value = None
+        vector_store.upsert_note_with_metadata.return_value = None
+        app._joplin.list_notes_for_indexing = Mock(
+            return_value=[
+                NoteDetails(
+                    id="n1",
+                    title="Contracts",
+                    body="typed contracts for reliable agents",
+                    parent_id="folder-1",
+                    updated_time=12345,
+                ),
+                NoteDetails(
+                    id="n2",
+                    title="",
+                    body=" ",
+                ),
+            ]
+        )
+
+        app._reindex_vector_store(vector_store=vector_store, limit=None)
+
+        vector_store.reset_collection.assert_called_once()
+        vector_store.upsert_note_with_metadata.assert_called_once()
+        call = vector_store.upsert_note_with_metadata.call_args.kwargs
+        self.assertEqual(call["note_id"], "n1")
+        self.assertEqual(call["title"], "Contracts")
+        self.assertIn("title_normalized", call["metadata"])
+        self.assertIn("content_length", call["metadata"])
+
+    def test_reindex_stops_when_vector_store_is_noop(self) -> None:
+        app = JoplinNotesAiApp(make_settings())
+        app._joplin.list_notes_for_indexing = Mock(return_value=[])
+
+        app._reindex_vector_store(vector_store=NoOpVectorStore(), limit=None)
+
+        app._joplin.list_notes_for_indexing.assert_not_called()
 
 
 if __name__ == "__main__":
