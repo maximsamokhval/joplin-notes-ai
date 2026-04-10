@@ -1,4 +1,6 @@
+import json
 import time
+from typing import Any
 
 import requests
 from loguru import logger
@@ -6,11 +8,45 @@ from pydantic import ValidationError
 
 from joplin_notes_ai.config import Settings
 from joplin_notes_ai.exceptions import LlmApiError, LlmResponseValidationError
-from joplin_notes_ai.models import TransformationResult
+from joplin_notes_ai.models import TagInfo, TagTaxonomyPlan, TransformationResult
 from joplin_notes_ai.repositories import PromptLoader
 
 
 class LlmClient:
+    _TAG_TAXONOMY_SYSTEM_PROMPT = """
+Ти створюєш чисту, практичну таксономію тегів для особистої бази знань.
+
+Мета:
+- зменшити хаос у тегах;
+- об'єднати дублікати і близькі за сенсом варіанти;
+- залишити короткі, стабільні, корисні для пошуку канонічні теги;
+- не плодити зайві майже-синоніми.
+
+Правила:
+1. Пиши ТІЛЬКИ валідний JSON.
+2. Не вигадуй теги, які не допомагають навігації.
+3. Об'єднуй різні мовні варіанти, однину/множину, дрібні орфографічні відмінності та майже-синоніми в один канонічний тег.
+4. Якщо тег надто вузький, випадковий, шумовий або одноразовий, можна запропонувати `delete`.
+5. Якщо тег уже хороший, використовуй `keep`.
+6. Якщо тег треба об'єднати з іншим канонічним тегом, використовуй `merge`.
+7. Канонічні теги мають бути короткими, послідовними і придатними для довгострокової системи знань.
+8. Не чіпай службові теги, які явно позначені як protected.
+
+Схема відповіді:
+{
+  "canonical_tags": ["ai", "architecture", "knowledge-management"],
+  "assignments": [
+    {
+      "current_title": "artificial-intelligence",
+      "canonical_title": "ai",
+      "action": "merge",
+      "reason": "Англомовний варіант того самого поняття"
+    }
+  ],
+  "taxonomy_summary": "Короткий опис принципу побудови таксономії"
+}
+""".strip()
+
     def __init__(self, settings: Settings, prompt_loader: PromptLoader):
         self._settings = settings
         self._prompt_loader = prompt_loader
@@ -27,14 +63,56 @@ class LlmClient:
             f"Список ІСНУЮЧИХ блокнотів для маршрутизації: [{notebooks_str}]\n\n"
             f"Заголовок чернетки: {title}\nКонтент чернетки:\n{body}"
         )
-        return self._request_transformation(system_prompt, user_context)
+        compact_retry_instruction = (
+            "ВАЖЛИВО: попередня відповідь була надто довгою або обірвалася. "
+            "Поверни коротшу, щільнішу версію замітки без втрати сенсу. "
+            "Не роздувай список секцій, не дублюй підпункти, не додавай зайвих прикладів. "
+            "Відповідь має бути СТРОГО валідним JSON за схемою."
+        )
+        return self._request_model(
+            system_prompt=system_prompt,
+            user_context=user_context,
+            response_model=TransformationResult,
+            compact_retry_instruction=compact_retry_instruction,
+        )
 
-    def _request_transformation(
+    def generate_tag_taxonomy(
+        self,
+        tags: list[TagInfo],
+        protected_tags: set[str],
+    ) -> TagTaxonomyPlan:
+        serialized_tags = [
+            {
+                "title": tag.title,
+                "note_count": tag.note_count,
+                "sample_note_titles": tag.sample_note_titles,
+            }
+            for tag in tags
+        ]
+        user_context = (
+            f"Protected tags: {json.dumps(sorted(protected_tags), ensure_ascii=False)}\n\n"
+            "Нижче список існуючих тегів із кількістю нотаток та прикладами:\n"
+            f"{json.dumps(serialized_tags, ensure_ascii=False, indent=2)}"
+        )
+        compact_retry_instruction = (
+            "Скороти taxonomy_summary і reasons, але збережи повний список assignments. "
+            "Поверни тільки валідний JSON."
+        )
+        return self._request_model(
+            system_prompt=self._TAG_TAXONOMY_SYSTEM_PROMPT,
+            user_context=user_context,
+            response_model=TagTaxonomyPlan,
+            compact_retry_instruction=compact_retry_instruction,
+        )
+
+    def _request_model(
         self,
         system_prompt: str,
         user_context: str,
+        response_model: Any,
+        compact_retry_instruction: str,
         compact_retry: bool = False,
-    ) -> TransformationResult:
+    ) -> Any:
         headers = {
             "Authorization": f"Bearer {self._settings.llm_api_key}",
             "Content-Type": "application/json",
@@ -45,7 +123,11 @@ class LlmClient:
                 {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
-                    "content": self._build_user_context(user_context, compact_retry),
+                    "content": self._build_user_context(
+                        user_context,
+                        compact_retry,
+                        compact_retry_instruction,
+                    ),
                 },
             ],
             "response_format": {"type": "json_object"},
@@ -69,7 +151,7 @@ class LlmClient:
             finish_reason = str(choice.get("finish_reason") or "")
             raw = choice["message"]["content"]
             self._log_response_meta(response_json, finish_reason, raw, compact_retry)
-            result = TransformationResult.model_validate_json(raw)
+            result = response_model.model_validate_json(raw)
             logger.success(f"Генерацію завершено за {time.time() - start_t:.2f} сек.")
             return result
         except ValidationError as exc:
@@ -78,7 +160,13 @@ class LlmClient:
                 logger.warning(
                     "LLM повернула обірваний або невалідний JSON. Повтор із компактнішою інструкцією."
                 )
-                return self._request_transformation(system_prompt, user_context, compact_retry=True)
+                return self._request_model(
+                    system_prompt=system_prompt,
+                    user_context=user_context,
+                    response_model=response_model,
+                    compact_retry_instruction=compact_retry_instruction,
+                    compact_retry=True,
+                )
             raise LlmResponseValidationError(f"Невідповідність схеми відповіді LLM: {exc}") from exc
         except requests.RequestException as exc:
             raise LlmApiError(f"Помилка LLM API: {exc}") from exc
@@ -93,16 +181,14 @@ class LlmClient:
         return bool(stripped) and not stripped.endswith("}")
 
     @staticmethod
-    def _build_user_context(user_context: str, compact_retry: bool) -> str:
+    def _build_user_context(
+        user_context: str,
+        compact_retry: bool,
+        compact_retry_instruction: str,
+    ) -> str:
         if not compact_retry:
             return user_context
-        return (
-            f"{user_context}\n\n"
-            "ВАЖЛИВО: попередня відповідь була надто довгою або обірвалася. "
-            "Поверни коротшу, щільнішу версію замітки без втрати сенсу. "
-            "Не роздувай список секцій, не дублюй підпункти, не додавай зайвих прикладів. "
-            "Відповідь має бути СТРОГО валідним JSON за схемою."
-        )
+        return f"{user_context}\n\n{compact_retry_instruction}"
 
     @staticmethod
     def _log_response_meta(
