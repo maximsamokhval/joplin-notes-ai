@@ -196,7 +196,11 @@ class NoteProcessingService:
                 timings_ms["upsert_embedding"] = self._elapsed_ms(stage_started)
 
             stage_started = time.perf_counter()
-            candidates = self._vector_store.search_candidates(note.id, result.content)
+            candidates = self._vector_store.search_candidates(
+                note.id,
+                result.new_title,
+                result.content,
+            )
             timings_ms["semantic_query"] = self._elapsed_ms(stage_started)
             return self._select_related_notes(candidates), candidates
         except IntegrationError as exc:
