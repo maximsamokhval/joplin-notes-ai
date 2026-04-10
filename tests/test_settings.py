@@ -15,6 +15,7 @@ class SettingsTestCase(unittest.TestCase):
         self.assertEqual(settings.llm_api_key, "llm-key")
         self.assertEqual(settings.similarity_threshold, 0.8)
         self.assertEqual(settings.embedding_model_name, "all-MiniLM-L6-v2")
+        self.assertEqual(settings.llm_max_tokens, 4000)
         self.assertEqual(settings.similarity_top_k, 5)
         self.assertEqual(settings.pause_between_notes, 1.5)
 
