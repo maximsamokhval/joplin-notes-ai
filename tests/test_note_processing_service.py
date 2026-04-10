@@ -58,6 +58,11 @@ class NoteProcessingServiceTestCase(unittest.TestCase):
         update = self.joplin.update_note.call_args.args[1]
         self.assertEqual(update.parent_id, "folder-1")
         self.assertIn("<!-- ai_audited_v1 -->", update.body)
+        self.vector_store.search_candidates.assert_called_once_with(
+            "n1",
+            "New title",
+            "Rewritten content",
+        )
 
     def test_skip_empty_note(self):
         self.joplin.get_note.return_value = NoteDetails(id="n1", title="Draft", body=" ")
