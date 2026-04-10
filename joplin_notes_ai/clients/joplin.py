@@ -85,14 +85,54 @@ class JoplinClient:
         return notes
 
     def get_note(self, note_id: str) -> NoteDetails | None:
-        res = self._request(f"notes/{note_id}", params={"fields": "id,title,body"})
+        fields = (
+            "id,title,body,parent_id,created_time,updated_time,"
+            "user_updated_time,is_todo,source_url"
+        )
+        res = self._request(f"notes/{note_id}", params={"fields": fields})
         if not res:
             return None
         return NoteDetails(
             id=note_id,
             title=res.get("title", ""),
             body=res.get("body", ""),
+            parent_id=res.get("parent_id"),
+            created_time=res.get("created_time"),
+            updated_time=res.get("updated_time"),
+            user_updated_time=res.get("user_updated_time"),
+            is_todo=res.get("is_todo"),
+            source_url=res.get("source_url"),
         )
+
+    def list_notes_for_indexing(self) -> list[NoteDetails]:
+        notes: list[NoteDetails] = []
+        page = 1
+        fields = (
+            "id,title,body,parent_id,created_time,updated_time,"
+            "user_updated_time,is_todo,source_url"
+        )
+        while True:
+            res = self._request("notes", params={"page": page, "fields": fields})
+            if not res or not res.get("items"):
+                break
+            for item in res["items"]:
+                notes.append(
+                    NoteDetails(
+                        id=item["id"],
+                        title=item.get("title", ""),
+                        body=item.get("body", ""),
+                        parent_id=item.get("parent_id"),
+                        created_time=item.get("created_time"),
+                        updated_time=item.get("updated_time"),
+                        user_updated_time=item.get("user_updated_time"),
+                        is_todo=item.get("is_todo"),
+                        source_url=item.get("source_url"),
+                    )
+                )
+            if not res.get("has_more"):
+                break
+            page += 1
+        return notes
 
     def ensure_tag_exists(self, tag_title: str) -> str | None:
         tags = self._request("tags")
