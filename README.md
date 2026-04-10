@@ -55,6 +55,7 @@ CLI-опции:
 - `--dry-run` — выполняет полный пайплайн без записи в Joplin и без `upsert` в ChromaDB.
 - `--limit N` — ограничивает количество заметок за запуск.
 - `--reindex-all` — очищает коллекцию ChromaDB и переиндексирует существующие заметки.
+- `--organize-tags` — анализирует существующие теги, строит таксономию и нормализует теги в заметках.
 
 ## Полная переиндексация векторной базы
 
@@ -75,6 +76,27 @@ python -m joplin_notes_ai --reindex-all --limit 100
 `word_count`, `line_count`, `has_machine_marker`, `source_created_time`,
 `source_updated_time`, `source_user_updated_time`, `source_url`, `is_todo`, `indexed_at_unix`.
 
+## Таксономия тегов
+
+Предпросмотр плана без изменений в Joplin:
+
+```bash
+python -m joplin_notes_ai --organize-tags --dry-run
+```
+
+Применение таксономии тегов:
+
+```bash
+python -m joplin_notes_ai --organize-tags
+```
+
+Команда:
+- собирает все существующие теги, кроме служебных;
+- запрашивает у LLM каноническую таксономию;
+- объединяет близкие по смыслу теги;
+- заменяет исходные теги в заметках на канонические;
+- удаляет шумовые или устаревшие теги, если это указано в плане.
+
 ## Конфигурация
 
 Обязательные переменные:
@@ -87,6 +109,7 @@ python -m joplin_notes_ai --reindex-all --limit 100
 - `JOPLIN_BASE_URL` (default: `http://localhost:41184`)
 - `LLM_BASE_URL` (default: `https://api.deepseek.com/v1`)
 - `LLM_MODEL_NAME` (default: `deepseek-chat`)
+- `LLM_MAX_TOKENS` (default: `4000`)
 - `PROMPT_FILE` (default: `system_prompt.txt`)
 - `CHROMA_DB_PATH` (default: `./chroma_db`)
 - `EMBEDDING_MODEL_NAME` (default: `all-MiniLM-L6-v2`)
