@@ -34,7 +34,25 @@ def main(argv: list[str] | None = None) -> int:
     try:
         settings = Settings()
     except ValidationError as exc:
-        print(f"Помилка конфігурації: {exc}", file=sys.stderr)
+        required_fields = []
+        for error in exc.errors():
+            if error.get("type") != "missing":
+                continue
+            loc = error.get("loc", [])
+            if not loc:
+                continue
+            required_fields.append(str(loc[0]))
+
+        if required_fields:
+            fields = ", ".join(sorted(set(required_fields)))
+            print(
+                "Ошибка конфигурации: отсутствуют обязательные переменные окружения: "
+                f"{fields}\n"
+                "Создайте файл .env на основе .env.example и заполните значения.",
+                file=sys.stderr,
+            )
+        else:
+            print(f"Ошибка конфигурации: {exc}", file=sys.stderr)
         return 1
 
     configure_logging(settings.log_file)
