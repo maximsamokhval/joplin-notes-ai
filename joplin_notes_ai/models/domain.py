@@ -12,6 +12,12 @@ class NoteDetails(BaseModel):
     id: str
     title: str
     body: str
+    parent_id: str | None = None
+    created_time: int | None = None
+    updated_time: int | None = None
+    user_updated_time: int | None = None
+    is_todo: int | None = None
+    source_url: str | None = None
 
 
 class Notebook(BaseModel):
