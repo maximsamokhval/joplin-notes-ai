@@ -1,0 +1,26 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Virtual environments
+.venv
+
+# pre-commit / secrets
+.pre-commit-cache/
+
+# Local runtime/state artifacts
+.env
+logs/
+joplin_agent.log
+chroma_db/
+repomix-output.xml
+
+# Python bytecode caches in source tree
+**/__pycache__/
