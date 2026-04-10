@@ -2,6 +2,7 @@ import unittest
 
 from joplin_notes_ai.clients.vector_store import VectorStore
 from joplin_notes_ai.config import Settings
+from joplin_notes_ai.models import NoteDetails
 
 
 def make_settings() -> Settings:
@@ -60,6 +61,28 @@ class VectorStoreFilteringTestCase(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertTrue(result.degraded)
         self.assertIn("model unavailable", result.message)
+
+    def test_build_metadata_for_note_contains_extended_fields(self):
+        note = NoteDetails(
+            id="n1",
+            title="  Contract Engineering  ",
+            body="Line one\nLine two",
+            parent_id="folder-1",
+            created_time=111,
+            updated_time=222,
+            user_updated_time=333,
+            is_todo=0,
+            source_url="https://example.com/article",
+        )
+
+        metadata = VectorStore.build_metadata_for_note(note, "<!-- ai_audited_v1 -->")
+
+        self.assertEqual(metadata["title_normalized"], "contract engineering")
+        self.assertEqual(metadata["notebook_id"], "folder-1")
+        self.assertEqual(metadata["content_length"], len(note.body))
+        self.assertEqual(metadata["line_count"], 2)
+        self.assertEqual(metadata["source_updated_time"], 222)
+        self.assertIn("indexed_at_unix", metadata)
 
 
 if __name__ == "__main__":
