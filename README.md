@@ -8,7 +8,7 @@
 - Ищет заметки без специального тега обработки.
 - Генерирует новую структуру и контент через LLM по JSON-контракту.
 - Определяет связные заметки через векторный поиск (ChromaDB).
-- Добавляет audit-блок и backup исходного текста в итоговую заметку.
+- Добавляет audit-блок в итоговую заметку.
 - Перемещает заметку в целевой блокнот (`target_notebook`) и проставляет теги.
 - Поддерживает безопасный запуск в режиме `--dry-run`.
 
@@ -54,6 +54,26 @@ CLI-опции:
 
 - `--dry-run` — выполняет полный пайплайн без записи в Joplin и без `upsert` в ChromaDB.
 - `--limit N` — ограничивает количество заметок за запуск.
+- `--reindex-all` — очищает коллекцию ChromaDB и переиндексирует существующие заметки.
+
+## Полная переиндексация векторной базы
+
+Очистка и пересчёт индекса по текущим заметкам из Joplin:
+
+```bash
+python -m joplin_notes_ai --reindex-all
+```
+
+Ограничить количество заметок для пробного прогона:
+
+```bash
+python -m joplin_notes_ai --reindex-all --limit 100
+```
+
+Во время переиндексации в ChromaDB сохраняются расширенные metadata для лучшего поиска:
+`id`, `title`, `title_normalized`, `notebook_id`, `content_preview`, `content_length`,
+`word_count`, `line_count`, `has_machine_marker`, `source_created_time`,
+`source_updated_time`, `source_user_updated_time`, `source_url`, `is_todo`, `indexed_at_unix`.
 
 ## Конфигурация
 
