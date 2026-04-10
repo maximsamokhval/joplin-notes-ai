@@ -1,0 +1,66 @@
+[project]
+name = "joplin-notes-ai"
+version = "0.1.0"
+description = "AI assistant pipeline for Joplin notes transformation and routing"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "chromadb>=1.5.7",
+    "loguru>=0.7.3",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.13.1",
+    "requests>=2.33.1",
+    "sentence-transformers>=5.3.0",
+]
+
+[project.scripts]
+joplin-notes-ai = "joplin_notes_ai.cli:main"
+
+[dependency-groups]
+dev = [
+    "bandit>=1.9.4",
+    "check-jsonschema>=0.37.1",
+    "detect-secrets>=1.5.0",
+    "interrogate>=1.7.0",
+    "mypy>=1.20.0",
+    "nbstripout>=0.9.1",
+    "pre-commit>=4.5.1",
+    "ruff>=0.15.10",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = ["chroma_db"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+exclude = "(^chroma_db/)"
+
+[[tool.mypy.overrides]]
+module = ["chromadb.*", "sentence_transformers.*"]
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests", "chroma_db"]
+skips = ["B101"]
+
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-module = false
+ignore-nested-functions = true
+ignore-private = true
+fail-under = 70
+exclude = ["tests", "chroma_db"]
