@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     llm_model_name: str = Field("deepseek-chat", alias="LLM_MODEL_NAME")
 
     processed_tag: str = Field("ai-audited", alias="PROCESSED_TAG")
+    failed_tag: str = Field("ai-failed", alias="FAILED_TAG")
+    machine_marker: str = Field("<!-- ai_audited_v1 -->", alias="MACHINE_MARKER")
     prompt_file: str = Field("system_prompt.txt", alias="PROMPT_FILE")
 
     chroma_db_path: str = Field("./chroma_db", alias="CHROMA_DB_PATH")
