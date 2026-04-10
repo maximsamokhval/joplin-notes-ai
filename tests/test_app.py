@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 from joplin_notes_ai.app import JoplinNotesAiApp
 from joplin_notes_ai.clients.vector_store import NoOpVectorStore
 from joplin_notes_ai.config import Settings
-from joplin_notes_ai.models import NoteDetails, WarmupResult
+from joplin_notes_ai.models import NoteDetails, TagOrganizationOutcome, WarmupResult
 
 
 def make_settings() -> Settings:
@@ -99,6 +99,21 @@ class AppVectorStoreBootstrapTestCase(unittest.TestCase):
         app._reindex_vector_store(vector_store=NoOpVectorStore(), limit=None)
 
         app._joplin.list_notes_for_indexing.assert_not_called()
+
+    @patch("joplin_notes_ai.app.TagTaxonomyService")
+    def test_run_organize_tags_invokes_taxonomy_service(self, service_cls: Mock) -> None:
+        app = JoplinNotesAiApp(make_settings())
+        service = service_cls.return_value
+        service.organize.return_value = TagOrganizationOutcome(
+            status="dry_run",
+            message="Preview taxonomy",
+            analyzed_tags=5,
+            changed_tags=2,
+        )
+
+        app.run(dry_run=True, organize_tags=True)
+
+        service.organize.assert_called_once_with(dry_run=True)
 
 
 if __name__ == "__main__":
