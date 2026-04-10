@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     llm_base_url: str = Field("https://api.deepseek.com/v1", alias="LLM_BASE_URL")
     llm_api_key: str = Field(..., alias="LLM_API_KEY")
     llm_model_name: str = Field("deepseek-chat", alias="LLM_MODEL_NAME")
+    llm_max_tokens: int = Field(4000, alias="LLM_MAX_TOKENS")
 
     processed_tag: str = Field("ai-audited", alias="PROCESSED_TAG")
     failed_tag: str = Field("ai-failed", alias="FAILED_TAG")
