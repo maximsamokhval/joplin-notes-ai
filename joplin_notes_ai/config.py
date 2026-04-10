@@ -28,6 +28,14 @@ class Settings(BaseSettings):
         "all-MiniLM-L6-v2",
         alias="EMBEDDING_MODEL_NAME",
     )
+    embedding_warmup_enabled: bool = Field(True, alias="EMBEDDING_WARMUP_ENABLED")
+    semantic_debug: bool = Field(False, alias="SEMANTIC_DEBUG")
+    semantic_debug_top_k: int = Field(10, alias="SEMANTIC_DEBUG_TOP_K")
+    semantic_log_candidates_limit: int = Field(10, alias="SEMANTIC_LOG_CANDIDATES_LIMIT")
+    semantic_warmup_text: str = Field(
+        "warmup note for embedding model",
+        alias="SEMANTIC_WARMUP_TEXT",
+    )
     similarity_threshold: float = Field(0.8, alias="SIMILARITY_THRESHOLD")
     similarity_top_k: int = Field(5, alias="SIMILARITY_TOP_K")
 
