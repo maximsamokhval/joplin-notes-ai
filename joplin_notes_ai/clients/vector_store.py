@@ -1,3 +1,4 @@
+import re
 import time
 from typing import Any
 
@@ -11,6 +12,8 @@ from joplin_notes_ai.models import NoteDetails, RelatedCandidate, RelatedNote, W
 
 
 class VectorStore:
+    _MAX_SEMANTIC_CHARS = 1600
+
     def __init__(self, settings: Settings):
         self._settings = settings
         self._emb_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
@@ -75,10 +78,11 @@ class VectorStore:
         metadata: dict[str, Any] | None,
     ) -> None:
         computed_metadata = self._build_index_metadata(note_id, title, content, metadata)
+        semantic_text = self.build_semantic_text(title, content)
         try:
             self._collection.upsert(
                 ids=[note_id],
-                documents=[f"{title}\n{content}"],
+                documents=[semantic_text],
                 metadatas=[computed_metadata],
             )
         except Exception as exc:  # noqa: BLE001 - wrapped into a typed exception
@@ -119,15 +123,16 @@ class VectorStore:
             "indexed_at_unix": int(time.time()),
         }
 
-    def search_candidates(self, note_id: str, content: str) -> list[RelatedCandidate]:
+    def search_candidates(self, note_id: str, title: str, content: str) -> list[RelatedCandidate]:
         top_k = (
             max(self._settings.similarity_top_k, self._settings.semantic_debug_top_k)
             if self._settings.semantic_debug
             else self._settings.similarity_top_k
         )
+        semantic_text = self.build_semantic_text(title, content)
         try:
             results = self._collection.query(
-                query_texts=[content],
+                query_texts=[semantic_text],
                 n_results=top_k,
                 where={"id": {"$ne": note_id}},
             )
@@ -138,8 +143,8 @@ class VectorStore:
         self._log_candidates(note_id, candidates, top_k)
         return candidates
 
-    def find_related(self, note_id: str, content: str) -> list[RelatedNote]:
-        candidates = self.search_candidates(note_id, content)
+    def find_related(self, note_id: str, title: str, content: str) -> list[RelatedNote]:
+        candidates = self.search_candidates(note_id, title, content)
         return [
             RelatedNote(
                 note_id=candidate.note_id,
@@ -235,16 +240,73 @@ class VectorStore:
         content: str,
         metadata: dict[str, Any] | None,
     ) -> dict[str, Any]:
+        semantic_text = VectorStore.build_semantic_text(title, content)
         base: dict[str, Any] = {
             "title": title,
             "id": note_id,
             "indexed_at_unix": int(time.time()),
             "content_length": len(content or ""),
             "title_normalized": (title or "").strip().lower(),
+            "semantic_text_length": len(semantic_text),
+            "semantic_text_preview": semantic_text[:280],
         }
         if metadata:
             base.update(metadata)
         return base
+
+    @classmethod
+    def build_semantic_text(cls, title: str, content: str) -> str:
+        normalized = cls._normalize_markdown(content)
+        without_toc = cls._strip_toc(normalized)
+        blocks = [block.strip() for block in without_toc.split("\n\n") if block.strip()]
+
+        headings: list[str] = []
+        paragraphs: list[str] = []
+        bullets: list[str] = []
+
+        for block in blocks:
+            if block.startswith("#"):
+                heading = re.sub(r"^#+\s*", "", block).strip()
+                if heading:
+                    headings.append(heading)
+                continue
+
+            block_lines = [line.strip() for line in block.splitlines() if line.strip()]
+            if all(line.startswith("- ") for line in block_lines):
+                bullets.extend(line[2:].strip() for line in block_lines if len(line) > 2)
+                continue
+
+            paragraphs.append(" ".join(block_lines))
+
+        sections: list[str] = []
+        clean_title = title.strip()
+        if clean_title:
+            sections.append(clean_title)
+        if headings:
+            sections.append("Теми: " + " | ".join(headings[:8]))
+        if paragraphs:
+            sections.append("\n\n".join(paragraphs[:3]))
+        if bullets:
+            sections.append("Ключові пункти: " + "; ".join(bullets[:8]))
+
+        semantic_text = "\n\n".join(section for section in sections if section).strip()
+        return semantic_text[: cls._MAX_SEMANTIC_CHARS]
+
+    @staticmethod
+    def _normalize_markdown(content: str) -> str:
+        normalized = (content or "").replace("\r\n", "\n").replace("\r", "\n")
+        normalized = re.sub(r"<!--\s*ai_audited_v1\s*-->", "", normalized)
+        normalized = re.sub(r"\n{3,}", "\n\n", normalized)
+        return normalized.strip()
+
+    @staticmethod
+    def _strip_toc(content: str) -> str:
+        without_toc = re.sub(
+            r"(?ms)^##\s+Зміст\s*\n.*?(?=^##\s+|\Z)",
+            "",
+            content,
+        )
+        return without_toc.strip()
 
 
 class NoOpVectorStore:
@@ -273,8 +335,8 @@ class NoOpVectorStore:
     def reset_collection(self) -> None:
         return None
 
-    def search_candidates(self, note_id: str, content: str) -> list[RelatedCandidate]:
+    def search_candidates(self, note_id: str, title: str, content: str) -> list[RelatedCandidate]:
         return []
 
-    def find_related(self, note_id: str, content: str) -> list[RelatedNote]:
+    def find_related(self, note_id: str, title: str, content: str) -> list[RelatedNote]:
         return []
