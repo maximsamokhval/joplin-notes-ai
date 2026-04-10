@@ -4,7 +4,9 @@ from .domain import (
     NoteSummary,
     ProcessedNoteUpdate,
     ProcessingOutcome,
+    RelatedCandidate,
     RelatedNote,
+    WarmupResult,
 )
 from .llm import TransformationResult
 
@@ -13,7 +15,9 @@ __all__ = [
     "NoteDetails",
     "Notebook",
     "RelatedNote",
+    "RelatedCandidate",
     "TransformationResult",
     "ProcessedNoteUpdate",
     "ProcessingOutcome",
+    "WarmupResult",
 ]
