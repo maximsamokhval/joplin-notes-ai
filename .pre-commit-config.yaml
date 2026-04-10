@@ -1,0 +1,70 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.1.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^(joplin_notes_ai/|tests/|main_vector\.py$)
+      - id: ruff-format
+        files: ^(joplin_notes_ai/|tests/|main_vector\.py$)
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.8.1
+    hooks:
+      - id: nbstripout
+
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.37.1
+    hooks:
+      - id: check-github-workflows
+      - id: check-dependabot
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4
+    hooks:
+      - id: bandit
+        args: ["-c", "pyproject.toml", "-r", "joplin_notes_ai"]
+        pass_filenames: false
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.8.15
+    hooks:
+      - id: uv-lock
+
+  - repo: local
+    hooks:
+      - id: mypy-python
+        name: Strict Type Check (Mypy)
+        entry: uv run mypy joplin_notes_ai tests main_vector.py
+        language: system
+        types: [python]
+        files: ^(joplin_notes_ai/|tests/|main_vector\.py$)
+        pass_filenames: false
+
+      - id: interrogate-docs
+        name: Docstring Coverage (Interrogate)
+        entry: uv run interrogate -c pyproject.toml joplin_notes_ai
+        language: system
+        types: [python]
+        files: ^joplin_notes_ai/
+        pass_filenames: false
