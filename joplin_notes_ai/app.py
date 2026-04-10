@@ -15,9 +15,22 @@ class JoplinNotesAiApp:
         self._joplin = JoplinClient(settings)
         self._llm = LlmClient(settings, PromptLoader(settings.prompt_file))
 
-    def run(self, dry_run: bool = False, limit: int | None = None) -> None:
+    def run(
+        self,
+        dry_run: bool = False,
+        limit: int | None = None,
+        reindex_all: bool = False,
+    ) -> None:
         logger.info("Старт автоматизованої системи трансформації знань.")
-        vector_store = self._build_vector_store(dry_run)
+        if reindex_all and dry_run:
+            logger.warning("Режим --dry-run ігнорується для --reindex-all.")
+
+        vector_store = self._build_vector_store(dry_run=False if reindex_all else dry_run)
+        if reindex_all:
+            self._reindex_vector_store(vector_store=vector_store, limit=limit)
+            logger.info("Сесію генерації завершено.")
+            return
+
         service = NoteProcessingService(
             settings=self._settings,
             joplin_client=self._joplin,
@@ -46,6 +59,48 @@ class JoplinNotesAiApp:
             time.sleep(self._settings.pause_between_notes)
 
         logger.info("Сесію генерації завершено.")
+
+    def _reindex_vector_store(
+        self,
+        vector_store: NoOpVectorStore | VectorStore,
+        limit: int | None,
+    ) -> None:
+        if isinstance(vector_store, NoOpVectorStore):
+            logger.error("Реіндексація недоступна: vector store працює в no-op режимі.")
+            return
+
+        notes = self._joplin.list_notes_for_indexing()
+        notes_to_index = notes[:limit] if limit is not None else notes
+        logger.info("Початок повної реіндексації. Нотаток до індексації: {}", len(notes_to_index))
+
+        try:
+            vector_store.reset_collection()
+        except Exception as exc:  # noqa: BLE001 - guarded with explicit log
+            logger.error(f"Не вдалося очистити векторну колекцію: {exc}")
+            return
+
+        indexed = 0
+        for note in notes_to_index:
+            body = note.body or ""
+            if not body.strip():
+                continue
+            metadata = VectorStore.build_metadata_for_note(note, self._settings.machine_marker)
+            try:
+                vector_store.upsert_note_with_metadata(
+                    note_id=note.id,
+                    title=note.title,
+                    content=body,
+                    metadata=metadata,
+                )
+                indexed += 1
+            except Exception as exc:  # noqa: BLE001 - continue with next note
+                logger.warning("Пропущено нотатку {} під час індексації: {}", note.id, exc)
+
+        logger.info(
+            "Повна реіндексація завершена. Успішно індексовано {} з {} нотаток.",
+            indexed,
+            len(notes_to_index),
+        )
 
     @staticmethod
     def _to_notebook_map(notebooks: list[Notebook]) -> dict[str, str]:
