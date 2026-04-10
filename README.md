@@ -21,30 +21,34 @@
 - Pydantic + pydantic-settings
 - Loguru
 
-## Установка и быстрый старт
+## Первый запуск
+
+1. Синхронизируйте окружение:
 
 ```bash
 uv sync
 ```
 
-Создайте `.env`:
+2. Создайте локальный `.env`:
 
 ```env
 JOPLIN_TOKEN=your_token
 LLM_API_KEY=your_llm_key
 ```
 
-Запуск:
+3. Запустите приложение:
 
 ```bash
 python -m joplin_notes_ai
 ```
 
-Совместимый legacy entrypoint:
+Альтернативный совместимый entrypoint:
 
 ```bash
 python main_vector.py
 ```
+
+Примечание: после `uv sync` команда `joplin-notes-ai` может не устанавливаться как shell entrypoint, пока проект не переведен в packaged-режим (`tool.uv.package = true` + `build-system`).
 
 CLI-опции:
 
@@ -104,10 +108,9 @@ Dev:
 - `joplin_notes_ai/config.py` — централизованные настройки.
 - `joplin_notes_ai/cli.py` — CLI и bootstrap.
 - `joplin_notes_ai/app.py` — orchestration уровня приложения.
-- `joplin_notes_ai/clients/` — интеграционные клиенты:
-- `joplin.py` для Joplin API
-- `llm.py` для LLM API
-- `vector_store.py` для ChromaDB
+- `joplin_notes_ai/clients/joplin.py` — интеграция с Joplin API.
+- `joplin_notes_ai/clients/llm.py` — интеграция с LLM API.
+- `joplin_notes_ai/clients/vector_store.py` — интеграция с ChromaDB.
 - `joplin_notes_ai/repositories/prompt_loader.py` — загрузка системного промпта.
 - `joplin_notes_ai/services/` — бизнес-логика обработки заметок и сборка финального markdown.
 - `joplin_notes_ai/models/` — доменные и контрактные модели.
