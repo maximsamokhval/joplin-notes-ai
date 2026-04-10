@@ -25,6 +25,33 @@ class Notebook(BaseModel):
     title: str
 
 
+class TagInfo(BaseModel):
+    id: str
+    title: str
+    note_count: int = 0
+    sample_note_titles: list[str] = Field(default_factory=list)
+
+
+class TagTaxonomyAssignment(BaseModel):
+    current_title: str
+    canonical_title: str | None = None
+    action: Literal["keep", "merge", "delete"]
+    reason: str = ""
+
+
+class TagTaxonomyPlan(BaseModel):
+    canonical_tags: list[str] = Field(default_factory=list)
+    assignments: list[TagTaxonomyAssignment] = Field(default_factory=list)
+    taxonomy_summary: str = ""
+
+
+class TagOrganizationOutcome(BaseModel):
+    status: Literal["completed", "dry_run", "skipped"]
+    message: str = ""
+    analyzed_tags: int = 0
+    changed_tags: int = 0
+
+
 class RelatedNote(BaseModel):
     note_id: str
     title: str
