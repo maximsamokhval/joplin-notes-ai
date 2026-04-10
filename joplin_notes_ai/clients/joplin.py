@@ -114,6 +114,16 @@ class JoplinClient:
             return False
         return self.attach_tag_to_note(note_id, tag_id)
 
+    def get_note_tag_titles(self, note_id: str) -> set[str]:
+        res = self._request(f"notes/{note_id}/tags", params={"fields": "title"})
+        if not res or "items" not in res:
+            return set()
+        return {
+            item["title"].strip().lower()
+            for item in res["items"]
+            if item.get("title") and item["title"].strip()
+        }
+
     def update_note(self, note_id: str, update: ProcessedNoteUpdate) -> bool:
         payload = update.model_dump(exclude_none=True)
         res = self._request(f"notes/{note_id}", method="put", data=payload)
