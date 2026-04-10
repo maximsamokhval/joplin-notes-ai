@@ -25,6 +25,24 @@ class RelatedNote(BaseModel):
     similarity: float
 
 
+class RelatedCandidate(BaseModel):
+    note_id: str
+    title: str
+    distance: float
+    similarity: float
+    accepted: bool = False
+    rejection_reason: str | None = None
+    rank: int
+
+
+class WarmupResult(BaseModel):
+    enabled: bool
+    success: bool
+    duration_ms: float
+    degraded: bool = False
+    message: str = ""
+
+
 class ProcessedNoteUpdate(BaseModel):
     title: str
     body: str
