@@ -23,6 +23,12 @@ class PromptLoaderTestCase(unittest.TestCase):
             except PermissionError:
                 pass
 
+    def test_system_prompt_contains_source_and_video_requirements(self):
+        prompt = Path("system_prompt.txt").read_text(encoding="utf-8")
+        self.assertIn("## Джерела та посилання", prompt)
+        self.assertIn("## Топ-5 ключових ідей з відео", prompt)
+        self.assertIn("У цьому розділі має бути РІВНО 5 пунктів.", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()
